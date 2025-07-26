@@ -197,19 +197,23 @@ WICHTIG: Für jeden Anforderungspunkt bewerte den Status:
       res.status(200).json(evaluationData)
     } catch (parseError) {
       console.error('JSON Parse Error:', parseError)
-      console.error('Response Text:', responseText.substring(0, 500))
+      console.error('Response Text (first 1000 chars):', responseText.substring(0, 1000))
+      console.error('Response Text (last 500 chars):', responseText.substring(responseText.length - 500))
       
       // Fallback mit partieller Antwort
       res.status(200).json({
         kategorien: [
           {
             name: "Analyse-Fehler",
-            kundeninhalt: { error: "JSON Parse Fehler - Response war nicht im erwarteten Format" },
+            kundeninhalt: { 
+              error: "JSON Parse Fehler - Response war nicht im erwarteten Format",
+              responsePreview: responseText.substring(0, 200) + "..."
+            },
             anforderungen_status: [
               { text: "PDF-Analyse", status: "problem" }
             ],
             feedback_typ: "problem",
-            feedback_text: "Die API-Antwort konnte nicht richtig verarbeitet werden. Bitte versuchen Sie es mit einem kleineren oder einfacheren PDF."
+            feedback_text: "Die API-Antwort konnte nicht richtig verarbeitet werden. Claude Response: " + responseText.substring(0, 100) + "..."
           }
         ],
         gesamtbewertung: {
