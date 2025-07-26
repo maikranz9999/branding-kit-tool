@@ -360,7 +360,7 @@ Bitte korrigiere die Bewertungskriterien für diese Kategorie entsprechend meine
         reader.readAsDataURL(pdfFile);
       });
 
-      const response = await fetch('/api/evaluate', {
+      const response = await fetch('/api/evaluate-new', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
