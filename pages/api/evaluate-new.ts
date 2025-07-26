@@ -20,7 +20,7 @@ export default async function handler(
       },
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 8000,
+        max_tokens: 16000,
         messages: [
           {
             role: 'user',
