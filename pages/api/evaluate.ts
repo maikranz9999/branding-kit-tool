@@ -4,48 +4,42 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  console.log('🔍 API Route gestartet')
+  
   if (req.method !== 'POST') {
+    console.log('❌ Falsche HTTP-Methode:', req.method)
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    const { pdfData, marktpreise, brandingRequirements } = req.body
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
-        max_tokens: 4000,
-        messages: [
-          {
-            role: 'user',
-            content: `Analysiere dieses PDF und gib ein einfaches JSON zurück: {"test": "erfolg", "status": "API funktioniert"}`
-          }
-        ]
-      })
-    })
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('API Error:', response.status, errorData)
-      throw new Error(`API-Fehler: ${response.status} - ${errorData}`)
-    }
-
-    const data = await response.json()
+    console.log('✅ POST-Request empfangen')
     
-    // Einfache Test-Antwort für jetzt
+    // Environment Variable prüfen
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    console.log('🔑 API Key vorhanden:', apiKey ? 'JA' : 'NEIN')
+    console.log('🔑 API Key Anfang:', apiKey ? apiKey.substring(0, 10) + '...' : 'LEER')
+    
+    // Request Body prüfen
+    console.log('📦 Request Body Größe:', JSON.stringify(req.body).length, 'Zeichen')
+    
+    if (!apiKey) {
+      throw new Error('API Key fehlt in Environment Variables')
+    }
+    
+    // Erst mal OHNE API-Call testen
+    console.log('✅ Einfache Test-Antwort senden')
+    
     const testResponse = {
       kategorien: [
         {
-          name: "Test",
-          kundeninhalt: { test: "API funktioniert!" },
+          name: "Debug Test",
+          kundeninhalt: { 
+            message: "API Route funktioniert!",
+            timestamp: new Date().toISOString(),
+            apiKeyPresent: !!apiKey
+          },
           anforderungen_status: [
-            { text: "API-Verbindung", status: "erfuellt" }
+            { text: "API-Route erreichbar", status: "erfuellt" }
           ],
           feedback_typ: "keins",
           feedback_text: ""
@@ -53,17 +47,21 @@ export default async function handler(
       ],
       gesamtbewertung: {
         punkte: 100,
-        note: "API Test erfolgreich"
+        note: "Debug Test erfolgreich"
       }
     }
     
+    console.log('✅ Sende Antwort zurück')
     res.status(200).json(testResponse)
     
   } catch (error) {
-    console.error('Evaluation Error:', error)
+    console.error('💥 Fehler aufgetreten:', error)
+    console.error('💥 Error Stack:', (error as Error).stack)
+    
     res.status(500).json({ 
-      error: 'Fehler bei der Bewertung', 
-      details: (error as Error).message 
+      error: 'Debug-Fehler', 
+      message: (error as Error).message,
+      stack: (error as Error).stack 
     })
   }
 }
