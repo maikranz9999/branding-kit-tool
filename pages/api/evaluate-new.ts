@@ -1,5 +1,61 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 
+// Verbesserte JSON-Parsing-Funktion
+function extractAndParseJSON(responseText: string) {
+  console.log('Trying to parse response text (first 300 chars):', responseText.substring(0, 300))
+  console.log('Response text length:', responseText.length)
+  
+  try {
+    // Methode 1: Direkt parsen (falls bereits sauberes JSON)
+    return JSON.parse(responseText);
+  } catch (e) {
+    console.log('Direct JSON parse failed, trying extraction methods...')
+    
+    // Methode 2: JSON aus Markdown-Blöcken extrahieren
+    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      console.log('Found JSON in markdown block')
+      try {
+        return JSON.parse(jsonMatch[1].trim());
+      } catch (e) {
+        console.error('JSON in Markdown-Block konnte nicht geparst werden:', e);
+      }
+    }
+
+    // Methode 3: JSON zwischen erstem { und letztem } extrahieren
+    const jsonStart = responseText.indexOf('{');
+    const jsonEnd = responseText.lastIndexOf('}');
+    
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      console.log(`Extracting JSON from position ${jsonStart} to ${jsonEnd}`)
+      try {
+        const jsonPart = responseText.substring(jsonStart, jsonEnd + 1);
+        console.log('Extracted JSON part (first 200 chars):', jsonPart.substring(0, 200))
+        return JSON.parse(jsonPart);
+      } catch (e) {
+        console.error('Extrahiertes JSON konnte nicht geparst werden:', e);
+      }
+    }
+
+    // Methode 4: Aggressive Bereinigung
+    let cleanedText = responseText
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      .replace(/^[^{]*/, '') // Alles vor dem ersten {
+      .replace(/[^}]*$/, '') // Alles nach dem letzten }
+      .trim();
+
+    console.log('Cleaned text (first 200 chars):', cleanedText.substring(0, 200))
+    
+    try {
+      return JSON.parse(cleanedText);
+    } catch (e) {
+      console.error('Auch nach Bereinigung konnte JSON nicht geparst werden:', e);
+      throw new Error(`JSON Parse failed after all attempts: ${e.message}`);
+    }
+  }
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -11,6 +67,10 @@ export default async function handler(
   try {
     const { pdfData, marktpreise, brandingRequirements } = req.body
 
+    console.log('Starting PDF analysis...')
+    console.log('PDF data length:', pdfData?.length || 0)
+    console.log('Marktpreise provided:', !!marktpreise)
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -19,7 +79,7 @@ export default async function handler(
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-20250514', // Aktualisiertes Modell
         max_tokens: 16000,
         messages: [
           {
@@ -35,7 +95,9 @@ export default async function handler(
               },
               {
                 type: 'text',
-                text: `Analysiere dieses Branding Kit für Hochzeitsdienstleister und extrahiere den Inhalt aus der mittleren Spalte (ignoriere gelbe Beispieltexte). Bewerte nach den exakten Kriterien und gib nur bei Problemen/Hinweisen Feedback. Führe zusätzlich eine PREISBEWERTUNG durch.
+                text: `WICHTIG: Antworte AUSSCHLIESSLICH mit dem JSON-Objekt. Keine zusätzlichen Erklärungen, keine Markdown-Formatierung, kein Text vor oder nach dem JSON!
+
+Analysiere dieses Branding Kit für Hochzeitsdienstleister und extrahiere den Inhalt aus der mittleren Spalte (ignoriere gelbe Beispieltexte). Bewerte nach den exakten Kriterien und gib nur bei Problemen/Hinweisen Feedback. Führe zusätzlich eine PREISBEWERTUNG durch.
 
 WICHTIG: Gib ALLE 7 Kategorien mit vollständigen anforderungen_status Arrays zurück!
 
@@ -140,7 +202,7 @@ BRANDING:
 - HOCHZEITSGEEIGNET: Pastell, Nude, Champagner, Sage, Dusty Rose
 - Moderne Schriftkombination
 
-Antworte in diesem JSON-Format mit VOLLSTÄNDIGEN anforderungen_status Arrays:
+Antworte NUR mit diesem JSON-Format (KEINE anderen Texte oder Formatierungen):
 
 {
   "kategorien": [
@@ -159,26 +221,24 @@ Antworte in diesem JSON-Format mit VOLLSTÄNDIGEN anforderungen_status Arrays:
         {"text": "Beruf muss konkret sein", "status": "problem"},
         {"text": "Jahreseinkommen: Mindestens 80.000€", "status": "erfuellt"}
       ],
-      "feedback_typ": "keins|hinweis|problem",
-      "feedback_text": "Text für Problem-Feedback (nur wenn feedback_typ = problem)"
+      "feedback_typ": "keins",
+      "feedback_text": ""
     }
   ],
   "gesamtbewertung": {
     "punkte": 85,
     "note": "Sehr gut"
   }
-}
-
-WICHTIG: Für jeden Anforderungspunkt bewerte den Status:
-- "erfuellt" = grüner Haken (Anforderung vollständig erfüllt)
-- "warnung" = gelbes Warnsignal (fast erfüllt, könnte besser sein)
-- "problem" = rotes X (Anforderung nicht erfüllt oder fehlt)`,
+}`,
               },
             ],
           },
         ],
       }),
     })
+
+    console.log('Claude API response status:', response.status)
+    console.log('Claude API response headers:', Object.fromEntries(response.headers.entries()))
 
     if (!response.ok) {
       const errorData = await response.text()
@@ -189,36 +249,45 @@ WICHTIG: Für jeden Anforderungspunkt bewerte den Status:
     const data = await response.json()
     let responseText = data.content[0].text
     
-    // Clean up JSON response
-    responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+    console.log('Received response from Claude (length):', responseText.length)
+    console.log('Response starts with:', responseText.substring(0, 100))
+    console.log('Response ends with:', responseText.substring(responseText.length - 100))
     
     try {
-      const evaluationData = JSON.parse(responseText)
+      const evaluationData = extractAndParseJSON(responseText);
+      console.log('Successfully parsed JSON response')
       res.status(200).json(evaluationData)
     } catch (parseError) {
       console.error('JSON Parse Error:', parseError)
-      console.error('Response Text (first 1000 chars):', responseText.substring(0, 1000))
-      console.error('Response Text (last 500 chars):', responseText.substring(responseText.length - 500))
+      console.error('Full Response Text:', responseText)
       
-      // Fallback mit partieller Antwort
+      // Detailliertere Fallback-Antwort mit mehr Debug-Info
       res.status(200).json({
         kategorien: [
           {
-            name: "Analyse-Fehler",
+            name: "JSON-Parse-Fehler",
             kundeninhalt: { 
-              error: "JSON Parse Fehler - Response war nicht im erwarteten Format",
-              responsePreview: responseText.substring(0, 200) + "..."
+              error: "Die Claude-Antwort konnte nicht als JSON verarbeitet werden",
+              debugInfo: {
+                responseLength: responseText.length,
+                startsWithBrace: responseText.trimStart().startsWith('{'),
+                endsWithBrace: responseText.trimEnd().endsWith('}'),
+                containsMarkdown: responseText.includes('```'),
+                firstChars: responseText.substring(0, 50),
+                lastChars: responseText.substring(responseText.length - 50)
+              },
+              parseError: (parseError as Error).message
             },
             anforderungen_status: [
-              { text: "PDF-Analyse", status: "problem" }
+              { text: "JSON-Verarbeitung", status: "problem" }
             ],
             feedback_typ: "problem",
-            feedback_text: "Die API-Antwort konnte nicht richtig verarbeitet werden. Claude Response: " + responseText.substring(0, 100) + "..."
+            feedback_text: `Parse-Fehler: ${(parseError as Error).message}. Debug-Info siehe Kundeninhalt. Bitte versuche es erneut oder kontaktiere den Support.`
           }
         ],
         gesamtbewertung: {
           punkte: 0,
-          note: "Analyse fehlgeschlagen"
+          note: "Verarbeitungsfehler"
         }
       })
     }
@@ -227,7 +296,8 @@ WICHTIG: Für jeden Anforderungspunkt bewerte den Status:
     console.error('Evaluation Error:', error)
     res.status(500).json({ 
       error: 'Fehler bei der Bewertung', 
-      details: (error as Error).message 
+      details: (error as Error).message,
+      timestamp: new Date().toISOString()
     })
   }
 }
