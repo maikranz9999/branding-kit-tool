@@ -4,42 +4,53 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  console.log('🔍 API Route gestartet')
-  
   if (req.method !== 'POST') {
-    console.log('❌ Falsche HTTP-Methode:', req.method)
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    console.log('✅ POST-Request empfangen')
-    
-    // Environment Variable prüfen
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    console.log('🔑 API Key vorhanden:', apiKey ? 'JA' : 'NEIN')
-    console.log('🔑 API Key Anfang:', apiKey ? apiKey.substring(0, 10) + '...' : 'LEER')
-    
-    // Request Body prüfen
-    console.log('📦 Request Body Größe:', JSON.stringify(req.body).length, 'Zeichen')
-    
-    if (!apiKey) {
-      throw new Error('API Key fehlt in Environment Variables')
+    const { pdfData, marktpreise, brandingRequirements } = req.body
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 4000,
+        messages: [
+          {
+            role: 'user',
+            content: `Teste die API-Verbindung und antworte mit einem einfachen JSON: {"test": "erfolg", "model": "claude-3-5-sonnet", "status": "API funktioniert"}`
+          }
+        ]
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      console.error('API Error:', response.status, errorData)
+      throw new Error(`API-Fehler: ${response.status} - ${errorData}`)
     }
+
+    const data = await response.json()
+    console.log('API Response:', data)
     
-    // Erst mal OHNE API-Call testen
-    console.log('✅ Einfache Test-Antwort senden')
-    
+    // Einfache Test-Antwort
     const testResponse = {
       kategorien: [
         {
-          name: "Debug Test",
+          name: "API Test",
           kundeninhalt: { 
-            message: "API Route funktioniert!",
-            timestamp: new Date().toISOString(),
-            apiKeyPresent: !!apiKey
+            message: "API-Verbindung erfolgreich!",
+            model: "claude-3-5-sonnet-20241022",
+            timestamp: new Date().toISOString()
           },
           anforderungen_status: [
-            { text: "API-Route erreichbar", status: "erfuellt" }
+            { text: "API-Verbindung", status: "erfuellt" }
           ],
           feedback_typ: "keins",
           feedback_text: ""
@@ -47,21 +58,17 @@ export default async function handler(
       ],
       gesamtbewertung: {
         punkte: 100,
-        note: "Debug Test erfolgreich"
+        note: "API Test erfolgreich"
       }
     }
     
-    console.log('✅ Sende Antwort zurück')
     res.status(200).json(testResponse)
     
   } catch (error) {
-    console.error('💥 Fehler aufgetreten:', error)
-    console.error('💥 Error Stack:', (error as Error).stack)
-    
+    console.error('Evaluation Error:', error)
     res.status(500).json({ 
-      error: 'Debug-Fehler', 
-      message: (error as Error).message,
-      stack: (error as Error).stack 
+      error: 'Fehler bei der Bewertung', 
+      details: (error as Error).message 
     })
   }
 }
