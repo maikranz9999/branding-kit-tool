@@ -1,26 +1,30 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, Bot, CheckCircle, AlertTriangle, XCircle, Download, Star } from 'lucide-react';
 
-const BrandingKitEvaluator = () => {
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [evaluationComplete, setEvaluationComplete] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [evaluationResults, setEvaluationResults] = useState(null);
-  const [processingStep, setProcessingStep] = useState('');
-  const fileInputRef = useRef(null);
+const BrandingKitEvaluator: React.FC = () => {
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
+  const [evaluationComplete, setEvaluationComplete] = useState<boolean>(false);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+  const [evaluationResults, setEvaluationResults] = useState<any>(null);
+  const [processingStep, setProcessingStep] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // PDF-Parsing mit bewährter Methode aus dem GNC-Tool
-  const parsePDFContent = async (file) => {
+  // PDF-Parsing mit strukturiertem Prompt
+  const parsePDFContent = async (file: File) => {
     try {
       setProcessingStep('PDF wird konvertiert...');
       
-      // PDF als base64 konvertieren (exakt wie im GNC-Tool)
-      const base64Data = await new Promise((resolve, reject) => {
+      // PDF als base64 konvertieren mit TypeScript-sicherer Implementierung
+      const base64Data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
-          const base64 = reader.result.split(",")[1];
-          resolve(base64);
+          if (typeof reader.result === 'string') {
+            const base64 = reader.result.split(",")[1];
+            resolve(base64);
+          } else {
+            reject(new Error("Failed to read file as string"));
+          }
         };
         reader.onerror = () => reject(new Error("Failed to read file"));
         reader.readAsDataURL(file);
@@ -36,7 +40,7 @@ const BrandingKitEvaluator = () => {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 4000,  // Erhöht für vollständige Extraktion
+          max_tokens: 4000,
           messages: [
             {
               role: "user",
@@ -119,59 +123,57 @@ Extrahiere ALLE 7 Bereiche vollständig. Ignoriere dabei die gelben Beispielspal
       
     } catch (error) {
       console.error('PDF-Parsing Fehler:', error);
-      setProcessingStep('Fehler beim PDF-Parsing: ' + error.message);
+      const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler';
+      setProcessingStep('Fehler beim PDF-Parsing: ' + errorMessage);
       
-      // Benutzerfreundliche Fehlermeldung wie im GNC-Tool
-      alert(`Fehler beim Lesen der Datei: ${error.message}. Bitte verwende die manuelle Texteingabe unten.`);
+      alert(`Fehler beim Lesen der Datei: ${errorMessage}. Bitte verwende die manuelle Texteingabe unten.`);
       return null;
     }
   };
 
-  // Echte Datenextraktion aus dem PDF-Text
-  const extractBrandingDataFromText = async (text) => {
-    const lowerText = text.toLowerCase();
-    
+  // Echte Datenextraktion aus dem extrahierten Text
+  const extractBrandingDataFromText = async (text: string) => {
     return {
       "1. Zielgruppe (demografisch)": {
-        "Vornamen des Paares": extractField(text, ['vorname', 'namen des paares', 'paar:', 'brautpaar']),
+        "Vornamen des Paares": extractField(text, ['vornamen des paares', 'vorname', 'namen']),
         "Alter": extractField(text, ['alter', 'jahre', 'jahr']),
         "Wohnort": extractField(text, ['wohnort', 'stadt', 'ort']),
         "Lage des Wohnorts": extractField(text, ['lage', 'stadtrand', 'innenstadt', 'dorf', 'ländlich']),
-        "Art des Wohnens": extractField(text, ['wohnen', 'haus', 'wohnung', 'villa', 'eigenheim']),
-        "Bildungsstand": extractField(text, ['bildung', 'studium', 'abitur', 'ausbildung', 'abschluss']),
-        "Kinder/Familienleben": extractField(text, ['kinder', 'familie', 'nachwuchs', 'familienleben']),
+        "Art des Wohnens": extractField(text, ['art des wohnens', 'wohnen', 'haus', 'wohnung', 'villa']),
+        "Bildungsstand": extractField(text, ['bildungsstand', 'bildung', 'studium', 'abitur', 'ausbildung']),
+        "Kinder/Familienleben": extractField(text, ['kinder', 'familienleben', 'familie', 'nachwuchs']),
         "Beruf": extractField(text, ['beruf', 'job', 'arbeitet', 'tätig']),
-        "Jahreseinkommen (netto)": extractField(text, ['einkommen', 'verdienst', 'gehalt', 'netto', '€', 'euro'])
+        "Jahreseinkommen (netto)": extractField(text, ['jahreseinkommen', 'einkommen', 'verdienst', 'gehalt', 'netto'])
       },
       "2. Zielgruppe (Lifestyle)": {
-        "Charakterzüge & Verhalten": extractField(text, ['charakter', 'persönlichkeit', 'eigenschaften', 'verhalten']),
+        "Charakterzüge & Verhalten": extractField(text, ['charakterzüge', 'charakter', 'persönlichkeit', 'verhalten']),
         "Hobbies & Interessen": extractField(text, ['hobbies', 'hobbys', 'interessen', 'freizeit']),
-        "Urlaub/Reiseverhalten": extractField(text, ['urlaub', 'reisen', 'verreisen', 'reise']),
+        "Urlaub/Reiseverhalten": extractField(text, ['urlaub', 'reiseverhalten', 'reisen', 'verreisen']),
         "Lifestyle": extractField(text, ['lifestyle', 'lebensstil', 'leben']),
-        "Art der Inneneinrichtung": extractField(text, ['einrichtung', 'wohnen', 'stil', 'interior']),
-        "Konsumverhalten/Lieblingsbrands": extractField(text, ['marken', 'brands', 'kaufen', 'konsum', 'liebling']),
-        "Social-Media-Verhalten": extractField(text, ['social media', 'instagram', 'facebook', 'online', 'internet'])
+        "Art der Inneneinrichtung": extractField(text, ['inneneinrichtung', 'einrichtung', 'wohnen', 'stil']),
+        "Konsumverhalten/Lieblingsbrands": extractField(text, ['konsumverhalten', 'lieblingsbrands', 'marken', 'brands']),
+        "Social-Media-Verhalten": extractField(text, ['social media', 'social-media', 'instagram', 'facebook'])
       },
       "3. Die Hochzeit der Zielgruppe": {
-        "Budget der Hochzeit": extractField(text, ['budget', 'kosten', '€', 'euro', 'preis']),
-        "Anzahl der Gäste": extractField(text, ['gäste', 'personen', 'anzahl', 'leute']),
-        "Ort der Location": extractField(text, ['location', 'ort', 'wo', 'veranstaltungsort']),
-        "Art der Location": extractField(text, ['art der location', 'scheune', 'schloss', 'villa', 'restaurant', 'garten']),
+        "Budget der Hochzeit": extractField(text, ['budget der hochzeit', 'budget', 'kosten', '€', 'euro']),
+        "Anzahl der Gäste": extractField(text, ['anzahl der gäste', 'gäste', 'personen', 'anzahl']),
+        "Ort der Location": extractField(text, ['ort der location', 'location', 'ort', 'wo']),
+        "Art der Location": extractField(text, ['art der location', 'scheune', 'schloss', 'villa', 'restaurant']),
         "Highlights der Hochzeit": extractField(text, ['highlights', 'besonders', 'speziell', 'wünsche']),
-        "Stil der Hochzeit": extractField(text, ['stil', 'boho', 'rustikal', 'elegant', 'fine art', 'vintage']),
-        "Worauf legt die Zielgruppe Wert": extractField(text, ['wert', 'wichtig', 'priorität', 'fokus'])
+        "Stil der Hochzeit": extractField(text, ['stil der hochzeit', 'stil', 'boho', 'rustikal', 'elegant']),
+        "Worauf legt die Zielgruppe Wert": extractField(text, ['worauf legt', 'wert', 'wichtig', 'priorität'])
       },
       "4. Moodboard der Hochzeit": {
         "Beschreibung": extractField(text, ['moodboard', 'bilder', 'inspiration', 'visual']),
         "Anzahl Bilder": extractImageCount(text),
-        "Bereiche": extractField(text, ['bereiche', 'kategorien', 'location', 'deko', 'styling'])
+        "Bereiche": extractField(text, ['bereiche', 'kategorien', 'location', 'deko'])
       },
       "5. Dein Angebot": {
-        "Leitsatz/Mission": extractField(text, ['mission', 'leitsatz', 'motto', 'slogan']),
-        "Vorteile für Kunden": extractField(text, ['vorteile', 'nutzen', 'benefit', 'warum']),
-        "Gelöste Probleme": extractField(text, ['probleme', 'lösung', 'hilfe', 'schwierigkeit']),
-        "Ausgelöste Emotionen": extractField(text, ['emotionen', 'gefühle', 'erleben', 'empfinden']),
-        "Kosten ohne Leistung": extractField(text, ['kosten ohne', 'risiko', 'ohne uns', 'verzicht'])
+        "Leitsatz/Mission": extractField(text, ['leitsatz', 'mission', 'motto', 'slogan']),
+        "Vorteile für Kunden": extractField(text, ['vorteile für kunden', 'vorteile', 'nutzen', 'benefit']),
+        "Gelöste Probleme": extractField(text, ['gelöste probleme', 'probleme', 'lösung', 'hilfe']),
+        "Ausgelöste Emotionen": extractField(text, ['ausgelöste emotionen', 'emotionen', 'gefühle', 'erleben']),
+        "Kosten ohne Leistung": extractField(text, ['kosten ohne leistung', 'kosten ohne', 'risiko', 'verzicht'])
       },
       "6. Leistungen & Preise": {
         "Paket 1": extractField(text, ['paket 1', 'basis', 'grundpaket', 'starter']),
@@ -183,15 +185,15 @@ Extrahiere ALLE 7 Bereiche vollständig. Ignoriere dabei die gelben Beispielspal
       "7. Visuelles Branding": {
         "Marke/Name": extractField(text, ['marke', 'name', 'firmenname', 'brand']),
         "Website (URL)": extractWebsite(text),
-        "CI-Farben": extractField(text, ['farben', 'farbpalette', 'farbe', 'color']),
-        "Schriftarten": extractField(text, ['schrift', 'font', 'typography', 'typeface']),
+        "CI-Farben": extractField(text, ['ci-farben', 'farben', 'farbpalette', 'farbe']),
+        "Schriftarten": extractField(text, ['schriftarten', 'schrift', 'font', 'typography']),
         "Logo": extractField(text, ['logo', 'signet', 'zeichen', 'symbol'])
       }
     };
   };
 
   // Hilfsfunktion: Feld aus Text extrahieren
-  const extractField = (text, keywords) => {
+  const extractField = (text: string, keywords: string[]): string => {
     const lowerText = text.toLowerCase();
     
     for (let keyword of keywords) {
@@ -222,7 +224,7 @@ Extrahiere ALLE 7 Bereiche vollständig. Ignoriere dabei die gelben Beispielspal
   };
 
   // Spezielle Extraktion für Bildanzahl
-  const extractImageCount = (text) => {
+  const extractImageCount = (text: string): string => {
     const numbers = text.match(/(\d+)\s*(bild|foto|image)/gi);
     if (numbers && numbers.length > 0) {
       return numbers[0];
@@ -231,7 +233,7 @@ Extrahiere ALLE 7 Bereiche vollständig. Ignoriere dabei die gelben Beispielspal
   };
 
   // Spezielle Extraktion für Preise
-  const extractPricing = (text) => {
+  const extractPricing = (text: string): string => {
     const priceMatches = text.match(/\d+[.,]?\d*\s*€/g);
     if (priceMatches && priceMatches.length > 0) {
       return `Preise gefunden: ${priceMatches.slice(0, 5).join(', ')}`;
@@ -240,7 +242,7 @@ Extrahiere ALLE 7 Bereiche vollständig. Ignoriere dabei die gelben Beispielspal
   };
 
   // Spezielle Extraktion für Website
-  const extractWebsite = (text) => {
+  const extractWebsite = (text: string): string => {
     const urlMatch = text.match(/(?:https?:\/\/)?(?:www\.)?[\w-]+\.[\w]{2,}/g);
     if (urlMatch && urlMatch.length > 0) {
       return urlMatch[0];
@@ -249,7 +251,7 @@ Extrahiere ALLE 7 Bereiche vollständig. Ignoriere dabei die gelben Beispielspal
   };
 
   // KI-Bewertung basierend auf echten extrahierten PDF-Daten
-  const evaluateExtractedData = async (extractedData) => {
+  const evaluateExtractedData = async (extractedData: any) => {
     try {
       setProcessingStep('KI-Bewertung wird durchgeführt...');
       
@@ -375,139 +377,56 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
       console.error('Bewertungsfehler:', error);
       
       // Fallback: Basis-Bewertung mit echten Daten
-      return {
-        overallScore: 50,
-        sections: [
-          {
-            title: "1. Zielgruppe (demografisch)",
-            score: 60,
-            status: "warning",
-            customerData: extractedData["1. Zielgruppe (demografisch)"],
-            issues: [
-              { type: "warning", message: "KI-Bewertung nicht verfügbar - bitte manuell prüfen 😊" }
-            ],
-            details: {
-              completeness: "Manuelle Prüfung erforderlich",
-              concreteness: "Manuelle Prüfung erforderlich",
-              plausibility: "Manuelle Prüfung erforderlich"
-            }
-          },
-          {
-            title: "2. Zielgruppe (Lifestyle)",
-            score: 60,
-            status: "warning",
-            customerData: extractedData["2. Zielgruppe (Lifestyle)"],
-            issues: [
-              { type: "warning", message: "KI-Bewertung nicht verfügbar - bitte manuell prüfen 😊" }
-            ],
-            details: {
-              completeness: "Manuelle Prüfung erforderlich",
-              quality: "Manuelle Prüfung erforderlich",
-              lifestyleIncomePlausibility: "Manuelle Prüfung erforderlich"
-            }
-          },
-          {
-            title: "3. Die Hochzeit der Zielgruppe",
-            score: 60,
-            status: "warning",
-            customerData: extractedData["3. Die Hochzeit der Zielgruppe"],
-            issues: [
-              { type: "warning", message: "KI-Bewertung nicht verfügbar - bitte manuell prüfen 😊" }
-            ],
-            details: {
-              budgetPlausibility: "Manuelle Prüfung erforderlich",
-              styleLocationMatch: "Manuelle Prüfung erforderlich",
-              highlightsBudgetMatch: "Manuelle Prüfung erforderlich"
-            }
-          },
-          {
-            title: "4. Moodboard der Hochzeit",
-            score: 40,
-            status: "warning",
-            customerData: extractedData["4. Moodboard der Hochzeit"],
-            issues: [
-              { type: "warning", message: "Moodboard-Bewertung erfordert visuelle Überprüfung der PDF 😊" }
-            ],
-            details: {
-              imageCount: "Visuelle Prüfung erforderlich",
-              requiredAreas: "Visuelle Prüfung erforderlich",
-              styleConsistency: "Visuelle Prüfung erforderlich"
-            }
-          },
-          {
-            title: "5. Dein Angebot",
-            score: 60,
-            status: "warning",
-            customerData: extractedData["5. Dein Angebot"],
-            issues: [
-              { type: "warning", message: "KI-Bewertung nicht verfügbar - bitte manuell prüfen 😊" }
-            ],
-            details: {
-              missionClarity: "Manuelle Prüfung erforderlich",
-              benefitsFormulated: "Manuelle Prüfung erforderlich",
-              problemsSolved: "Manuelle Prüfung erforderlich",
-              emotions: "Manuelle Prüfung erforderlich"
-            }
-          },
-          {
-            title: "6. Leistungen & Preise",
-            score: 60,
-            status: "warning",
-            customerData: extractedData["6. Leistungen & Preise"],
-            issues: [
-              { type: "warning", message: "KI-Bewertung nicht verfügbar - bitte manuell prüfen 😊" }
-            ],
-            details: {
-              packageStructure: "Manuelle Prüfung erforderlich",
-              pricing: "Manuelle Prüfung erforderlich",
-              noHourlyRates: "Manuelle Prüfung erforderlich"
-            }
-          },
-          {
-            title: "7. Visuelles Branding",
-            score: 60,
-            status: "warning",
-            customerData: extractedData["7. Visuelles Branding"],
-            issues: [
-              { type: "warning", message: "KI-Bewertung nicht verfügbar - bitte manuell prüfen 😊" }
-            ],
-            details: {
-              brandName: "Manuelle Prüfung erforderlich",
-              domain: "Manuelle Prüfung erforderlich",
-              colors: "Manuelle Prüfung erforderlich",
-              fonts: "Manuelle Prüfung erforderlich"
-            }
-          }
-        ]
-      };
+      return createFallbackEvaluation(extractedData);
     }
   };
 
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
+  // Fallback-Bewertung wenn KI-API nicht verfügbar
+  const createFallbackEvaluation = (extractedData: any) => {
+    return {
+      overallScore: 50,
+      sections: Object.keys(extractedData).map((title, index) => ({
+        title,
+        score: 60,
+        status: "warning" as const,
+        customerData: extractedData[title],
+        issues: [
+          { type: "warning" as const, message: "KI-Bewertung nicht verfügbar - bitte manuell prüfen 😊" }
+        ],
+        details: {
+          completeness: "Manuelle Prüfung erforderlich",
+          quality: "Manuelle Prüfung erforderlich",
+          plausibility: "Manuelle Prüfung erforderlich"
+        }
+      }))
+    };
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (file && file.type === 'application/pdf') {
       setUploadedFile(file);
     }
   };
 
-  const handleDragOver = (event) => {
+  const handleDragOver = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
   };
 
-  const handleDragEnter = (event) => {
+  const handleDragEnter = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(true);
   };
 
-  const handleDragLeave = (event) => {
+  const handleDragLeave = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(false);
   };
 
-  const handleDrop = (event) => {
+  const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(false);
@@ -557,7 +476,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
     setProcessingStep('');
   };
 
-  const getStatusIcon = (status) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'good': return <CheckCircle className="w-5 h-5 text-green-600" />;
       case 'warning': return <AlertTriangle className="w-5 h-5 text-yellow-600" />;
@@ -566,7 +485,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'good': return 'text-green-600';
       case 'warning': return 'text-yellow-600';
@@ -575,7 +494,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
     }
   };
 
-  const getScoreColor = (score) => {
+  const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-600";
     if (score >= 60) return "text-yellow-600";
     return "text-red-600";
@@ -590,7 +509,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
     report += `Bewertungsdatum: ${new Date().toLocaleDateString('de-DE')}\n`;
     report += `Gesamtbewertung: ${evaluationResults.overallScore}/100 Punkte\n\n`;
     
-    evaluationResults.sections.forEach((section) => {
+    evaluationResults.sections.forEach((section: any) => {
       report += `${section.title}\n`;
       report += `${'='.repeat(section.title.length)}\n`;
       report += `Bewertung: ${section.score}/100 Punkte\n\n`;
@@ -603,7 +522,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
       
       if (section.issues.length > 0) {
         report += `Feedback:\n`;
-        section.issues.forEach((issue) => {
+        section.issues.forEach((issue: any) => {
           const prefix = issue.type === 'error' ? '❌' : issue.type === 'warning' ? '⚠️' : 'ℹ️';
           report += `${prefix} ${issue.message}\n`;
         });
@@ -612,31 +531,6 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
       
       report += `\n`;
     });
-    
-    report += `ZUSAMMENFASSUNG\n`;
-    report += `===============\n\n`;
-    
-    const criticalIssues = evaluationResults.sections.filter(s => s.status === 'error');
-    const warnings = evaluationResults.sections.filter(s => s.status === 'warning');
-    
-    if (criticalIssues.length > 0) {
-      report += `🚨 SOFORT BEHEBEN:\n`;
-      criticalIssues.forEach(section => {
-        section.issues.filter(i => i.type === 'error').forEach(issue => {
-          report += `• ${section.title}: ${issue.message.replace(/😊/g, '').trim()}\n`;
-        });
-      });
-      report += `\n`;
-    }
-    
-    if (warnings.length > 0) {
-      report += `⚠️ VERBESSERUNGSVORSCHLÄGE:\n`;
-      warnings.forEach(section => {
-        section.issues.filter(i => i.type === 'warning').forEach(issue => {
-          report += `• ${section.title}: ${issue.message.replace(/😊/g, '').trim()}\n`;
-        });
-      });
-    }
     
     return report;
   };
@@ -670,7 +564,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
         </div>
 
         <div className="grid grid-cols-1 gap-8 mb-8">
-          {evaluationResults.sections.map((section, index) => (
+          {evaluationResults.sections.map((section: any, index: number) => (
             <div key={index} className="border rounded-lg overflow-hidden">
               
               {/* Header mit Titel und Score */}
@@ -699,7 +593,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
                     Deine Angaben aus der PDF:
                   </h4>
                   <div className="space-y-2">
-                    {section.customerData && Object.entries(section.customerData).map(([key, value]) => (
+                    {section.customerData && Object.entries(section.customerData).map(([key, value]: [string, any]) => (
                       <div key={key} className="text-sm">
                         <span className="font-medium text-gray-700">{key}:</span>
                         <span className="text-gray-600 ml-2">{value}</span>
@@ -719,7 +613,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
                   {section.details && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                       <div className="text-sm space-y-1">
-                        {Object.entries(section.details).map(([key, value]) => (
+                        {Object.entries(section.details).map(([key, value]: [string, any]) => (
                           <div key={key} className="text-blue-800">• {value}</div>
                         ))}
                       </div>
@@ -728,7 +622,7 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
 
                   {/* Issues und Hinweise */}
                   <div className="space-y-2">
-                    {section.issues.map((issue, issueIndex) => (
+                    {section.issues.map((issue: any, issueIndex: number) => (
                       <div key={issueIndex} className={`text-sm p-3 rounded border-l-4 ${
                         issue.type === 'error' ? 'bg-red-50 border-red-400 text-red-800' :
                         issue.type === 'warning' ? 'bg-yellow-50 border-yellow-400 text-yellow-800' :
@@ -756,13 +650,13 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
           </h2>
           <div className="space-y-3">
             {evaluationResults.sections
-              .filter(s => s.issues.some(i => i.type === 'error' || i.type === 'warning'))
+              .filter((s: any) => s.issues.some((i: any) => i.type === 'error' || i.type === 'warning'))
               .slice(0, 3)
-              .map((section, index) => (
+              .map((section: any, index: number) => (
                 <div key={index} className="p-3 bg-white rounded border-l-4 border-yellow-400">
                   <div className="font-medium text-gray-800">{section.title}</div>
                   <div className="text-sm text-gray-600 mt-1">
-                    {section.issues.find(i => i.type === 'error' || i.type === 'warning')?.message}
+                    {section.issues.find((i: any) => i.type === 'error' || i.type === 'warning')?.message}
                   </div>
                 </div>
               ))}
@@ -802,10 +696,10 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-blue-800 font-medium mb-2">{processingStep || 'Analyse läuft...'}</p>
             <p className="text-blue-600 text-sm">
-              {processingStep.includes('gelesen') ? 'PDF-Datei wird verarbeitet' : 
+              {processingStep.includes('konvertiert') ? 'PDF-Datei wird verarbeitet' : 
                processingStep.includes('extrahiert') ? 'Text und Daten werden aus der PDF geholt' :
                processingStep.includes('erkannt') ? 'Die 7 Branding-Bereiche werden identifiziert' :
-               processingStep.includes('strukturiert') ? 'Deine Angaben werden den Bewertungskriterien zugeordnet' :
+               processingStep.includes('verarbeitet') ? 'Deine Angaben werden den Bewertungskriterien zugeordnet' :
                processingStep.includes('Bewertung') ? 'Qualitätsbewertung nach Branchenstandards' :
                'Deine PDF wird intelligent analysiert'}
             </p>
@@ -813,19 +707,19 @@ WICHTIG: Verwende nur die ECHTEN Kundendaten, keine erfundenen Beispiele!`;
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
             <div className={`p-4 rounded transition-colors ${
-              processingStep.includes('gelesen') ? 'bg-blue-100 text-blue-800' : 'bg-gray-50'
+              processingStep.includes('konvertiert') ? 'bg-blue-100 text-blue-800' : 'bg-gray-50'
             }`}>
-              {processingStep.includes('gelesen') ? '🔄' : '✓'} PDF-Verarbeitung
+              {processingStep.includes('konvertiert') ? '🔄' : '✓'} PDF-Verarbeitung
             </div>
             <div className={`p-4 rounded transition-colors ${
               processingStep.includes('extrahiert') ? 'bg-blue-100 text-blue-800' : 'bg-gray-50'
             }`}>
-              {processingStep.includes('extrahiert') ? '🔄' : processingStep.includes('erkannt') ? '✓' : '⏳'} Text-Extraktion
+              {processingStep.includes('extrahiert') ? '🔄' : processingStep.includes('verarbeitet') ? '✓' : '⏳'} Text-Extraktion
             </div>
             <div className={`p-4 rounded transition-colors ${
               processingStep.includes('erkannt') ? 'bg-blue-100 text-blue-800' : 'bg-gray-50'
             }`}>
-              {processingStep.includes('erkannt') ? '🔄' : processingStep.includes('strukturiert') ? '✓' : '⏳'} Bereich-Erkennung
+              {processingStep.includes('erkannt') ? '🔄' : processingStep.includes('abgeschlossen') ? '✓' : '⏳'} Bereich-Erkennung
             </div>
             <div className={`p-4 rounded transition-colors ${
               processingStep.includes('Bewertung') ? 'bg-blue-100 text-blue-800' : 'bg-gray-50'
